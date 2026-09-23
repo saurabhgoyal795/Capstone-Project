@@ -12,12 +12,13 @@ load_dotenv()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-SUPPORTED_PROVIDERS = ("openai", "gemini", "ollama")
+SUPPORTED_PROVIDERS = ("openai", "gemini", "ollama", "bedrock")
 
 DEFAULT_MODELS = {
     "openai": "gpt-4o-mini",
     "gemini": "gemini-2.0-flash",
     "ollama": "llama3.1",
+    "bedrock": "global.amazon.nova-2-lite-v1:0",
 }
 
 
@@ -34,6 +35,7 @@ class Settings:
     request_timeout: int = field(default_factory=lambda: int(_env("LLM_TIMEOUT_SECONDS", "120")))
     max_retries: int = field(default_factory=lambda: int(_env("LLM_MAX_RETRIES", "2")))
     ollama_base_url: str = field(default_factory=lambda: _env("OLLAMA_BASE_URL", "http://localhost:11434"))
+    aws_region: str = field(default_factory=lambda: _env("AWS_REGION", "ap-south-1"))
     data_dir: Path = field(default_factory=lambda: PROJECT_ROOT / _env("DATA_DIR", "data"))
     output_dir: Path = field(default_factory=lambda: PROJECT_ROOT / _env("OUTPUT_DIR", "output"))
     max_workers: int = field(default_factory=lambda: int(_env("MAX_WORKERS", "3")))

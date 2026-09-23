@@ -40,7 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--data-dir", type=Path, help="Folder containing input documents (default: DATA_DIR)")
     parser.add_argument("--output-dir", type=Path, help="Folder for generated outputs (default: OUTPUT_DIR)")
     parser.add_argument("--workers", type=int, help="Documents processed in parallel (default: MAX_WORKERS)")
-    parser.add_argument("--provider", choices=["openai", "gemini", "ollama"], help="LLM provider override")
+    parser.add_argument("--provider", choices=["openai", "gemini", "ollama", "bedrock"], help="LLM provider override")
     parser.add_argument("--model", help="Model name override")
     parser.add_argument("--limit", type=int, help="Only process the first N documents (sorted by name)")
     parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], type=str.upper,

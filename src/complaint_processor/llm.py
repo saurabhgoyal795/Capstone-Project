@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_llm(settings: Settings) -> BaseChatModel:
-    """Build a chat model for ``settings.llm_provider`` (openai | gemini | ollama)."""
+    """Build a chat model for ``settings.llm_provider`` (openai | gemini | ollama | bedrock)."""
     settings.validate()
     provider = settings.llm_provider
     model = settings.resolved_model
@@ -51,6 +51,18 @@ def get_llm(settings: Settings) -> BaseChatModel:
             reasoning=False,
             num_ctx=8192,
             client_kwargs={"timeout": settings.request_timeout},
+        )
+    elif provider == "bedrock":
+        from botocore.config import Config
+        from langchain_aws import ChatBedrockConverse
+
+        # Credentials come from the standard AWS chain (profile locally, IAM role on EC2).
+        llm = ChatBedrockConverse(
+            model=model,
+            region_name=settings.aws_region,
+            temperature=settings.temperature,
+            config=Config(read_timeout=settings.request_timeout,
+                          retries={"max_attempts": settings.max_retries + 1, "mode": "standard"}),
         )
     else:  # pragma: no cover - validate() already guards this
         raise ValueError(f"Unsupported provider: {provider}")
