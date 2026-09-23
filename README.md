@@ -4,6 +4,8 @@
 > Author: **Saurabh Goyal**
 >
 > **Live demo:** http://15.207.159.211 (Streamlit web UI on AWS EC2, powered by Amazon Bedrock Nova 2 Lite)
+>
+> **Demo video:** [docs/demo.mp4](docs/demo.mp4) (3-minute walkthrough of the web UI)
 
 A batch pipeline built with LangChain and Pydantic. It reads customer complaint documents (PDF, TXT, DOCX) and turns each one into three outputs:
 
