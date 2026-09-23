@@ -44,7 +44,13 @@ FONT = "Calibri"
 MONO = "Consolas"
 
 SLIDE_W, SLIDE_H = Inches(13.333), Inches(7.5)
-TOTAL_SLIDES = 12
+TOTAL_SLIDES = 13
+LIVE_URL = "http://15.207.159.211"  # replaced with the EC2 public URL after deployment
+
+# Second real run of the same 7 documents on Amazon Bedrock (outputs not committed; output/ holds
+# the Ollama run). Numbers from that run's run_summary.json.
+BEDROCK_RUN = {"model": "Nova 2 Lite", "model_id": "global.amazon.nova-2-lite-v1:0", "total_seconds": 8.6,
+               "avg_seconds": 4.2, "workers": 4, "success": 6, "failed": 1}
 
 
 # --------------------------------------------------------------------------- helpers
@@ -250,7 +256,7 @@ def slide_title(prs):
              size=22, color=RGBColor(0xCB, 0xD5, 0xE1))
     text_box(slide, 1.0, 5.3, 8.0, 0.6, "Saurabh Goyal", size=28, color=WHITE, bold=True)
     text_box(slide, 1.0, 5.95, 8.0, 0.5, "September 2026", size=20, color=RGBColor(0xCB, 0xD5, 0xE1))
-    text_box(slide, 8.3, 6.55, 4.6, 0.5, "Python • LangChain • Pydantic", size=16,
+    text_box(slide, 8.3, 6.55, 4.6, 0.5, "Python • LangChain • Pydantic • AWS", size=16,
              color=ACCENT, align=PP_ALIGN.RIGHT)
     notes(slide, "Capstone project: an end-to-end GenAI pipeline that turns raw customer complaint "
                  "documents into structured case data, a customer reply email and an internal case summary.")
@@ -348,7 +354,7 @@ def slide_architecture(prs):
     # bottom row: LLM factory feeds the chains; config feeds the factory
     by, bh = 5.3, 1.35
     label_box(slide, 3.25, by, 4.9, bh, "LLM Factory  •  get_llm(settings)",
-              ["OpenAI  •  Gemini  •  Ollama (local)"], fill=WHITE, line=ACCENT_2, title_size=15,
+              ["OpenAI  •  Gemini  •  Ollama (local)  •  AWS Bedrock"], fill=WHITE, line=ACCENT_2, title_size=15,
               body_size=13)
     label_box(slide, 8.8, by, 2.0, bh, "Config", [".env → Settings", "CLI flags override"],
               title_size=15, body_size=12)
@@ -359,7 +365,7 @@ def slide_architecture(prs):
     arrow(slide, 7.0, by - 0.02, 7.0, 4.6, color=ACCENT_2)
     notes(slide, "Ingestion loads and normalises files; the pipeline runs extraction then a RunnableParallel "
                  "of email and summary; writers persist everything. The LLM is injected via a provider-"
-                 "agnostic factory configured from .env.")
+                 "agnostic factory configured from .env (OpenAI, Gemini, local Ollama or AWS Bedrock).")
 
 
 def slide_workflow(prs, summary, facts):
@@ -510,7 +516,7 @@ def slide_errors(prs, facts):
         ("Task level", "Each task runs guarded; extraction failure → failed, email/summary failure "
                        "→ partial"),
         ("Worker level", "_safe_process() guard: a worker thread never raises"),
-        ("Provider level", "LLM timeouts + max_retries; native → fallback → retry"),
+        ("Provider level", "LLM timeouts + max_retries (botocore retries on Bedrock); native → fallback → retry"),
         ("Config level", "Settings.validate(): bad provider or missing API key → clear error, exit code"),
     ]
     for i, (t, d) in enumerate(levels):
@@ -584,7 +590,7 @@ def slide_sample(prs, extraction, email, case_summary):
 
 
 def slide_results(prs, rows, summary):
-    slide = base_slide(prs, "Results: Real Run (Ollama glm-4.7-flash, local)", number=10)
+    slide = base_slide(prs, "Results: Real Run + Provider Comparison", number=10)
     header = ["File", "Category", "Escalation", "Case status", "Result", "Time (s)"]
     tbl = slide.shapes.add_table(len(rows) + 1, len(header), Inches(0.5), Inches(1.4), Inches(8.4),
                                  Inches(0.5 * (len(rows) + 1))).table
@@ -625,18 +631,32 @@ def slide_results(prs, rows, summary):
     stats = [
         (f"{summary['success']}/{summary['total_files']}", "documents succeeded"),
         (f"{summary['failed']}", "failed gracefully (corrupt PDF)"),
-        (f"{summary['total_seconds']:.1f} s", f"total, {summary['max_workers']} workers"),
-        ("28", "pytest tests passing"),
+        (f"{summary['total_seconds']:.1f} s", f"total, {summary['max_workers']} workers (local Ollama)"),
+        (f"~{summary['total_seconds'] / BEDROCK_RUN['total_seconds']:.0f}×", "faster on AWS Bedrock"),
     ]
+    # provider comparison bars (same 7 documents, same 6/1 result)
+    bars = [(f"Ollama glm-4.7-flash (local, {summary['max_workers']} workers)", summary["total_seconds"], MUTED),
+            (f"Bedrock {BEDROCK_RUN['model']} ({BEDROCK_RUN['workers']} workers)", BEDROCK_RUN["total_seconds"],
+             ACCENT)]
+    longest = max(b[1] for b in bars)
+    for i, (lbl, secs, col) in enumerate(bars):
+        yy = 6.0 + i * 0.47
+        text_box(slide, 0.5, yy, 3.6, 0.4, lbl, size=12, color=INK, bold=True, anchor=MSO_ANCHOR.MIDDLE)
+        bw = max(0.08, 3.9 * secs / longest)
+        box(slide, 4.15, yy + 0.07, bw, 0.26, fill=col, line=None, shape=MSO_SHAPE.RECTANGLE)
+        text_box(slide, 4.2 + bw, yy, 1.0, 0.4, f"{secs:.1f} s", size=12, color=NAVY, bold=True,
+                 anchor=MSO_ANCHOR.MIDDLE)
     for i, (big, small) in enumerate(stats):
         yy = 1.4 + i * 1.33
         box(slide, 9.3, yy, 3.53, 1.18, fill=TEAL_LIGHT if i != 1 else RGBColor(0xFE, 0xF2, 0xF2),
             line=None)
         text_box(slide, 9.45, yy + 0.05, 3.3, 0.65, big, size=30, color=NAVY, bold=True)
         text_box(slide, 9.45, yy + 0.68, 3.3, 0.45, small, size=14, color=MUTED)
-    notes(slide, "Data from output/final_report.csv and run_summary.json. Escalations were flagged for "
-                 "the laptop defect, late TV delivery and unpaid refund; the pure enquiry (006) was "
-                 "correctly marked is_complaint = No.")
+    notes(slide, "Table data from output/final_report.csv and run_summary.json (local Ollama glm-4.7-flash). "
+                 "Escalations were flagged for the laptop defect, late TV delivery and unpaid refund; the pure "
+                 "enquiry (006) was correctly marked is_complaint = No. The same batch on AWS Bedrock Nova 2 "
+                 f"Lite took {BEDROCK_RUN['total_seconds']} s instead of {summary['total_seconds']} s with the "
+                 "same 6 success / 1 failed result and the same contact, category and flag values.")
 
 
 def slide_stack(prs):
@@ -646,41 +666,92 @@ def slide_stack(prs):
         ("LangChain", "prompts, runnables, RunnableParallel"),
         ("Pydantic v2", "schemas & validation"),
         ("pypdf / python-docx", "document ingestion"),
-        ("OpenAI • Gemini • Ollama", "swappable LLM providers"),
-        ("pytest", "28 offline tests (fake LLM)"),
+        ("LLM providers", "OpenAI, Gemini, Ollama, AWS Bedrock"),
+        ("Streamlit • Docker", "web UI, container on AWS EC2"),
+        ("pytest", "offline tests (fake LLM)"),
     ]
     text_box(slide, 0.5, 1.35, 5.8, 0.45, "Stack", size=20, color=ACCENT, bold=True)
     for i, (t, d) in enumerate(stack):
-        yy = 1.9 + i * 0.8
-        box(slide, 0.5, yy, 5.8, 0.68, fill=LIGHT, line=None)
-        text_box(slide, 0.65, yy, 2.9, 0.68, t, size=16, color=NAVY, bold=True, anchor=MSO_ANCHOR.MIDDLE)
-        text_box(slide, 3.55, yy, 2.7, 0.68, d, size=14, color=INK, anchor=MSO_ANCHOR.MIDDLE)
+        yy = 1.9 + i * 0.7
+        box(slide, 0.5, yy, 5.8, 0.6, fill=LIGHT, line=None)
+        text_box(slide, 0.65, yy, 2.9, 0.6, t, size=16, color=NAVY, bold=True, anchor=MSO_ANCHOR.MIDDLE)
+        text_box(slide, 3.55, yy, 2.7, 0.6, d, size=14, color=INK, anchor=MSO_ANCHOR.MIDDLE)
     text_box(slide, 6.9, 1.35, 5.9, 0.45, "Practices", size=20, color=ACCENT, bold=True)
     bullets(slide, 6.9, 1.9, 5.93, 4.9, [
         ("Config via .env: ", "provider, model, workers, timeouts; CLI flags override"),
         ("Provider-agnostic factory: ", "get_llm() lazily imports only the chosen SDK; runs fully "
-                                        "local with Ollama"),
+                                        "local with Ollama or on AWS Bedrock"),
         ("Dependency injection: ", "pipeline takes any chat model, so tests use a fake LLM"),
         ("Modular package: ", "ingestion • prompts • chains • pipeline • writers"),
         ("Reproducible: ", "Git, requirements.txt, sample-data generator script"),
     ], size=17, spacing=10)
-    notes(slide, "Switching providers is a one-line .env change. Tests cover ingestion, JSON repair, "
+    notes(slide, "Switching providers is a one-line .env change (LLM_PROVIDER=bedrock uses the AWS credential chain). Tests cover ingestion, JSON repair, "
                  "retries, guardrails, parallelism and failure isolation without calling a real LLM.")
 
 
+def slide_deployment(prs):
+    slide = base_slide(prs, "Web UI & Cloud Deployment (AWS)", number=12)
+    # user + github (outside AWS)
+    label_box(slide, 0.4, 2.3, 1.8, 1.3, "User", ["web browser"], fill=LIGHT, title_size=17, body_size=13)
+    label_box(slide, 0.4, 4.35, 1.8, 1.3, "GitHub", ["public repo"], fill=LIGHT, title_size=17, body_size=13)
+    # EC2 host
+    box(slide, 2.95, 1.35, 6.5, 4.5, fill=None, line=ACCENT_2, dash=True, line_w=1.5)
+    text_box(slide, 3.05, 1.38, 6.3, 0.4, "EC2 t4g.small  •  Amazon Linux 2023 (arm64)  •  ap-south-1",
+             size=13, color=ACCENT_2, bold=True, align=PP_ALIGN.CENTER)
+    box(slide, 3.15, 1.85, 6.1, 1.95, fill=TEAL_LIGHT, line=ACCENT)
+    text_box(slide, 3.25, 1.88, 5.9, 0.35, "Docker container  (python:3.11-slim, non-root)", size=12,
+             color=ACCENT, bold=True, align=PP_ALIGN.CENTER)
+    label_box(slide, 3.35, 2.35, 2.5, 1.25, "Streamlit UI", ["app.py  •  :8501"], fill=WHITE, line=NAVY_2,
+              title_size=16, body_size=13)
+    label_box(slide, 6.55, 2.35, 2.5, 1.25, "Pipeline", ["extract → email ‖ summary"], fill=WHITE,
+              line=NAVY_2, title_size=16, body_size=13)
+    label_box(slide, 3.15, 4.05, 3.0, 1.6, "user-data / redeploy.sh",
+              ["git clone / pull", "docker build", "docker run -p 80:8501"], fill=WHITE, line=BORDER,
+              title_size=14, body_size=12)
+    label_box(slide, 6.4, 4.05, 2.65, 1.6, "IAM instance role",
+              ["bedrock:InvokeModel", "+ SSM managed", "no API keys on server"], fill=WHITE, line=ACCENT_2,
+              title_size=14, body_size=12)
+    # Bedrock + SSM (AWS services)
+    label_box(slide, 10.05, 2.1, 2.85, 1.75, "Amazon Bedrock",
+              ["Nova 2 Lite", "ChatBedrockConverse"], fill=NAVY, line=None, title_color=WHITE,
+              body_color=WHITE, title_size=17, body_size=13)
+    label_box(slide, 10.05, 4.35, 2.85, 1.3, "SSM Run Command", ["runs redeploy.sh", "on the EC2 host"], fill=LIGHT,
+              title_size=14, body_size=12)
+    # arrows
+    arrow(slide, 2.25, 2.95, 3.3, 2.95)
+    text_box(slide, 2.2, 2.5, 0.72, 0.35, "HTTP :80", size=10, color=MUTED, bold=True, align=PP_ALIGN.CENTER)
+    arrow(slide, 5.9, 2.97, 6.5, 2.97)
+    arrow(slide, 9.1, 2.97, 10.0, 2.97)
+    arrow(slide, 2.25, 5.0, 3.1, 5.0)
+    arrow(slide, 4.65, 4.02, 4.65, 3.65)
+    arrow(slide, 9.1, 4.5, 10.6, 3.9, color=ACCENT_2)
+    arrow(slide, 10.0, 5.2, 9.48, 5.2, color=MUTED, width=1.5)
+    # live URL + UI features
+    box(slide, 0.4, 6.0, 12.5, 0.95, fill=NAVY, line=None)
+    text_box(slide, 0.6, 6.03, 12.1, 0.45, f"Live demo:  {LIVE_URL}", size=20, color=WHITE, bold=True,
+             anchor=MSO_ANCHOR.MIDDLE)
+    text_box(slide, 0.6, 6.47, 12.1, 0.42,
+             "Sample or uploaded docs  •  metrics + report table  •  per-document tabs  •  CSV + zip download"
+             "  •  run limits", size=14, color=RGBColor(0xCB, 0xD5, 0xE1), anchor=MSO_ANCHOR.MIDDLE)
+    notes(slide, "The Streamlit app runs in a Docker container on a small Graviton EC2 instance. The container "
+                 "calls Amazon Bedrock (Nova 2 Lite) with credentials from the instance's IAM role, so no API "
+                 "keys live on the server. User-data clones the public GitHub repo, builds the image and runs it "
+                 "on port 80 with --restart unless-stopped; redeploys run redeploy.sh through SSM Run Command.")
+
+
 def slide_future(prs, summary):
-    slide = base_slide(prs, "Limitations & Future Work", number=12)
+    slide = base_slide(prs, "Limitations & Future Work", number=13)
     text_box(slide, 0.5, 1.3, 5.9, 0.55, "Limitations", size=22, color=RED, bold=True)
     bullets(slide, 0.5, 1.95, 5.9, 3.3, [
         "No OCR: scanned PDFs yield no text",
-        f"Local model: ~{summary['avg_seconds_per_document']:.0f} s per document",
+        f"Local model: ~{summary['avg_seconds_per_document']:.0f} s/doc (Bedrock ~{BEDROCK_RUN['avg_seconds']:.0f} s)",
         "Email guardrail warns, no auto-rewrite",
         "Small test set (7 files), no accuracy benchmark",
     ], size=19, bullet_color=RED, spacing=14)
     text_box(slide, 6.93, 1.3, 5.9, 0.55, "Future work", size=22, color=GREEN, bold=True)
     bullets(slide, 6.93, 1.95, 5.9, 3.3, [
         "OCR (Tesseract) + .eml ingestion",
-        "Human-in-the-loop review UI + REST API",
+        "Review/approve in the UI, HTTPS + auth",
         "Labelled eval set, field-level accuracy",
         "CRM / ticketing integration, auto-routing",
     ], size=19, bullet_color=GREEN, spacing=14)
@@ -709,6 +780,7 @@ def build() -> Path:
     slide_sample(prs, extraction, email, case_summary)
     slide_results(prs, rows, summary)
     slide_stack(prs)
+    slide_deployment(prs)
     slide_future(prs, summary)
     assert len(prs.slides) == TOTAL_SLIDES
     DEST.parent.mkdir(parents=True, exist_ok=True)

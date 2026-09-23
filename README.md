@@ -2,6 +2,8 @@
 
 > **IIT Patna – GenAI Development Program · Capstone Project 1**
 > Author: **Saurabh Goyal**
+>
+> **Live demo:** http://15.207.159.211 (Streamlit web UI on AWS EC2, powered by Amazon Bedrock Nova 2 Lite)
 
 A batch pipeline built with LangChain and Pydantic. It reads customer complaint documents (PDF, TXT, DOCX) and turns each one into three outputs:
 
@@ -9,7 +11,9 @@ A batch pipeline built with LangChain and Pydantic. It reads customer complaint 
 2. **A customer reply email**: professional, empathetic and grounded in the document
 3. **An internal case summary**: overview, key issue, action taken, status and recommended next action
 
-The run also writes a consolidated `final_report.csv` and a machine-readable `run_summary.json`. The pipeline is provider-agnostic. It works with **OpenAI**, **Google Gemini** or a **fully local Ollama** model. The sample run in this repo used local `glm-4.7-flash`, with no API key.
+The run also writes a consolidated `final_report.csv` and a machine-readable `run_summary.json`. The pipeline is provider-agnostic. It works with **OpenAI**, **Google Gemini**, **Amazon Bedrock** (e.g. Nova 2 Lite or Claude on Bedrock) or a **fully local Ollama** model. The sample outputs committed in this repo come from local `glm-4.7-flash`, with no API key. The same batch on Bedrock Nova 2 Lite took **8.6 s instead of 127.4 s** (see [Provider comparison](#provider-comparison-ollama-local-vs-amazon-bedrock)).
+
+Besides the CLI there is a **Streamlit web UI** (`app.py`), packaged with Docker and deployed on **AWS EC2**, calling Bedrock through an IAM instance role, so no API keys live on the server.
 
 ---
 
@@ -23,16 +27,18 @@ The run also writes a consolidated `final_report.csv` and a machine-readable `ru
 6. [Setup](#6-setup)
 7. [Environment Variables](#7-environment-variables)
 8. [How to Run](#8-how-to-run)
-9. [Sample Inputs](#9-sample-inputs)
-10. [Sample Outputs (real run)](#10-sample-outputs-real-run)
-11. [Workflow Design](#11-workflow-design)
-12. [Prompt Engineering & Hallucination Controls](#12-prompt-engineering--hallucination-controls)
-13. [Error Handling](#13-error-handling)
-14. [Logging](#14-logging)
-15. [Testing](#15-testing)
-16. [Key Design Decisions](#16-key-design-decisions)
-17. [Limitations & Future Improvements](#17-limitations--future-improvements)
-18. [Mapping to Evaluation Requirements](#18-mapping-to-evaluation-requirements)
+9. [Web UI (Streamlit)](#9-web-ui-streamlit)
+10. [Deployment (AWS)](#10-deployment-aws)
+11. [Sample Inputs](#11-sample-inputs)
+12. [Sample Outputs (real run)](#12-sample-outputs-real-run)
+13. [Workflow Design](#13-workflow-design)
+14. [Prompt Engineering & Hallucination Controls](#14-prompt-engineering--hallucination-controls)
+15. [Error Handling](#15-error-handling)
+16. [Logging](#16-logging)
+17. [Testing](#17-testing)
+18. [Key Design Decisions](#18-key-design-decisions)
+19. [Limitations & Future Improvements](#19-limitations--future-improvements)
+20. [Mapping to Evaluation Requirements](#20-mapping-to-evaluation-requirements)
 
 ---
 
@@ -57,6 +63,8 @@ Doing this by hand is slow and inconsistent, and mistakes happen easily: a wrong
 | **Batch parallelism** | Documents are processed concurrently in a `ThreadPoolExecutor` (`MAX_WORKERS`). Results keep input order. | `pipeline.py` |
 | **Outputs** | Per-document JSON, email `.txt` and summary `.md` files, plus `final_report.csv` and `run_summary.json`. | `writers.py` |
 | **CLI** | Flags override `.env`. Prints a console summary table and returns a meaningful exit code. | `cli.py`, `main.py` |
+| **Web UI** | Streamlit app: sample or uploaded documents, metrics, report table, per-document tabs, CSV and zip downloads. | `app.py` |
+| **Deployment** | Docker image on AWS EC2, Bedrock via an IAM instance role, one-command redeploy. | `Dockerfile`, `deploy/` |
 
 ## 3. Architecture
 
@@ -92,8 +100,9 @@ flowchart LR
         RS[run_summary.json]
     end
 
+    UI(["Streamlit UI (app.py) / CLI (main.py)"]) --> D
     CFG[/"config.py + .env"/] -.-> LLM
-    LLM[["LLM factory (llm.py)<br/>OpenAI · Gemini · Ollama"]] -.-> S1
+    LLM[["LLM factory (llm.py)<br/>OpenAI · Gemini · Ollama · Bedrock"]] -.-> S1
     LLM -.-> S2
     LOG[/"logging_setup.py<br/>console + logs/app.log"/] -.- POOL
 
@@ -112,7 +121,7 @@ flowchart LR
 |---|---|
 | Language | Python 3.10+ (developed and tested on 3.11) |
 | LLM orchestration | `langchain-core` 0.3 (`ChatPromptTemplate`, `RunnableLambda`, `RunnableParallel`, `with_structured_output`, `PydanticOutputParser`) |
-| LLM providers | `langchain-openai` (`ChatOpenAI`), `langchain-google-genai` (`ChatGoogleGenerativeAI`), `langchain-ollama` (`ChatOllama`) |
+| LLM providers | `langchain-openai` (`ChatOpenAI`), `langchain-google-genai` (`ChatGoogleGenerativeAI`), `langchain-ollama` (`ChatOllama`), `langchain-aws` (`ChatBedrockConverse`, Amazon Bedrock Converse API via `boto3`) |
 | Schemas / validation | Pydantic v2 (enums, field validators) |
 | Document parsing | `pypdf`, `python-docx`, built-in text I/O |
 | Reporting | `pandas` (CSV), `json` |
@@ -120,28 +129,39 @@ flowchart LR
 | Config | `python-dotenv` + frozen `dataclass` settings |
 | Logging | stdlib `logging` with a `RotatingFileHandler` |
 | Testing | `pytest`, LangChain `FakeListChatModel` (fully offline) |
+| Web UI | `streamlit` (`app.py`, theme and server settings in `.streamlit/config.toml`) |
+| Packaging / cloud | Docker (`python:3.11-slim`), AWS EC2 (t4g.small, Amazon Linux 2023, arm64), Amazon Bedrock, IAM instance role, AWS Systems Manager (SSM) |
 | Sample data / docs | `reportlab` (sample PDFs), `matplotlib` (architecture diagram) |
 
 ## 5. Project Structure
 
 ```
 complaint-case-processor/
-├── main.py                       # entry point: python main.py [options]
+├── main.py                       # CLI entry point: python main.py [options]
+├── app.py                        # Streamlit web UI: streamlit run app.py
+├── .streamlit/config.toml        # Streamlit theme + server settings (upload size, XSRF, no telemetry)
 ├── requirements.txt
 ├── .env.example                  # template for .env (copy and fill in)
+├── Dockerfile                    # python:3.11-slim, non-root, healthcheck, Streamlit on :8501
+├── .dockerignore
+├── deploy/
+│   ├── ec2_user_data.sh          # EC2 bootstrap: install Docker, clone repo, build + run on :80
+│   └── redeploy.sh               # git pull, rebuild image, restart container (run on the host / via SSM)
 ├── data/                         # input documents (7 samples)
 │   ├── complaint_001.pdf … complaint_006.txt
 │   └── corrupted_007.pdf         # deliberately unreadable
 ├── docs/
-│   └── architecture.png          # rendered by scripts/render_architecture.py
+│   ├── architecture.png          # rendered by scripts/render_architecture.py
+│   └── Capstone_Presentation.pptx  # built by scripts/build_presentation.py
 ├── scripts/
 │   ├── generate_sample_data.py   # (re)creates data/ with fictional complaints
-│   └── render_architecture.py    # draws docs/architecture.png with matplotlib
+│   ├── render_architecture.py    # draws docs/architecture.png with matplotlib
+│   └── build_presentation.py     # builds docs/Capstone_Presentation.pptx
 ├── src/complaint_processor/
 │   ├── __main__.py               # python -m complaint_processor
 │   ├── cli.py                    # argparse CLI, orchestration, console table, exit codes
 │   ├── config.py                 # Settings dataclass from env / .env
-│   ├── llm.py                    # LLM factory (openai | gemini | ollama)
+│   ├── llm.py                    # LLM factory (openai | gemini | ollama | bedrock)
 │   ├── ingestion.py              # file discovery + text extraction + IngestionError
 │   ├── schemas.py                # Pydantic models & enums (the data contract)
 │   ├── prompts.py                # the 3 ChatPromptTemplates
@@ -152,7 +172,8 @@ complaint-case-processor/
 ├── tests/
 │   ├── test_ingestion.py         # 8 tests
 │   ├── test_chains.py            # 13 tests
-│   └── test_pipeline.py          # 7 tests
+│   ├── test_pipeline.py          # 7 tests
+│   └── test_app.py               # web UI processing logic
 ├── output/                       # generated (real run included)
 │   ├── structured_data/          # complaint_00X.json
 │   ├── customer_emails/          # complaint_00X_email.txt
@@ -164,7 +185,7 @@ complaint-case-processor/
 
 ## 6. Setup
 
-**Prerequisites:** Python **3.10+**. You also need one of the following: an OpenAI API key, a Google AI (Gemini) API key, or a local [Ollama](https://ollama.com) install.
+**Prerequisites:** Python **3.10+**. You also need one of the following: an OpenAI API key, a Google AI (Gemini) API key, AWS credentials with Amazon Bedrock access, or a local [Ollama](https://ollama.com) install.
 
 ### Option A: venv + pip
 
@@ -193,20 +214,34 @@ ollama pull llama3.1                 # default model for the ollama provider
 ollama pull glm-4.7-flash
 ```
 
+### For Amazon Bedrock
+
+No API key is used. `ChatBedrockConverse` (through `boto3`) reads credentials from the **standard AWS credential chain**: environment variables, an AWS CLI profile locally, or the IAM instance role on EC2.
+
+```bash
+aws configure --profile capstone          # or: aws sso login --profile capstone
+export AWS_PROFILE=capstone
+export AWS_REGION=ap-south-1              # default region used by the app
+```
+
+The identity needs `bedrock:InvokeModel` / `bedrock:Converse` for the chosen model. The default model `global.amazon.nova-2-lite-v1:0` works as soon as Bedrock is enabled for the account. Claude on Bedrock (e.g. `global.anthropic.claude-haiku-4-5-20251001-v1:0`) also works, but only after the account's one-time Anthropic use-case form has been submitted in the Bedrock console.
+
 ## 7. Environment Variables
 
 All settings are read in `config.py`, with `.env` supported through `python-dotenv`. CLI flags override them. See [`.env.example`](.env.example).
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `openai` | `openai` \| `gemini` \| `ollama` |
-| `MODEL_NAME` | *(empty → provider default)* | Defaults: `gpt-4o-mini` (openai), `gemini-2.0-flash` (gemini), `llama3.1` (ollama) |
+| `LLM_PROVIDER` | `openai` | `openai` \| `gemini` \| `ollama` \| `bedrock` |
+| `MODEL_NAME` | *(empty → provider default)* | Defaults: `gpt-4o-mini` (openai), `gemini-2.0-flash` (gemini), `llama3.1` (ollama), `global.amazon.nova-2-lite-v1:0` (bedrock) |
 | `OPENAI_API_KEY` | – | Required when `LLM_PROVIDER=openai` (checked by `Settings.validate()`) |
 | `GOOGLE_API_KEY` | – | Required when `LLM_PROVIDER=gemini` |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `AWS_REGION` | `ap-south-1` | Bedrock region (used when `LLM_PROVIDER=bedrock`) |
+| `AWS_PROFILE` | – | *Read by boto3, not by `config.py`.* Selects a local AWS CLI profile. Leave unset on EC2, where the IAM instance role is used |
 | `LLM_TEMPERATURE` | `0.1` | Low temperature for factual, repeatable output |
-| `LLM_TIMEOUT_SECONDS` | `120` | Per-request timeout (all providers) |
-| `LLM_MAX_RETRIES` | `2` | Provider SDK retries for transient errors (OpenAI / Gemini) |
+| `LLM_TIMEOUT_SECONDS` | `120` | Per-request timeout (all providers; the botocore read timeout on Bedrock) |
+| `LLM_MAX_RETRIES` | `2` | Provider SDK retries for transient errors (OpenAI / Gemini; on Bedrock, botocore `max_attempts = retries + 1`, standard mode) |
 | `DATA_DIR` | `data` | Input folder, relative to the project root |
 | `OUTPUT_DIR` | `output` | Output folder, relative to the project root |
 | `MAX_WORKERS` | `3` | Documents processed in parallel (must be ≥ 1) |
@@ -227,7 +262,7 @@ python main.py
 
 | Flag | Overrides | Example |
 |---|---|---|
-| `--provider {openai,gemini,ollama}` | `LLM_PROVIDER` (resets the model to the provider default unless `--model` is given) | `--provider ollama` |
+| `--provider {openai,gemini,ollama,bedrock}` | `LLM_PROVIDER` (resets the model to the provider default unless `--model` is given) | `--provider ollama` |
 | `--model NAME` | `MODEL_NAME` | `--model gpt-4o-mini` |
 | `--workers N` | `MAX_WORKERS` | `--workers 4` |
 | `--data-dir PATH` | `DATA_DIR` | `--data-dir ./my_inbox` |
@@ -247,6 +282,12 @@ python main.py --provider gemini --model gemini-2.0-flash
 # Fully local with Ollama: exactly the configuration of the included sample run
 python main.py --provider ollama --model glm-4.7-flash --workers 3
 
+# Amazon Bedrock with the default model (Nova 2 Lite); credentials from AWS_PROFILE / the AWS chain
+AWS_PROFILE=capstone python main.py --provider bedrock --workers 4
+
+# Claude Haiku 4.5 on Bedrock (needs the Anthropic use-case form submitted for the account)
+python main.py --provider bedrock --model global.anthropic.claude-haiku-4-5-20251001-v1:0
+
 # Quick smoke test on 2 documents with verbose logs
 python main.py --provider ollama --limit 2 --log-level DEBUG
 
@@ -256,7 +297,100 @@ PYTHONPATH=src python -m complaint_processor --help
 
 **Exit codes:** `0` if at least one document was processed (success or partial). `1` for a fatal config or LLM-initialisation error, a missing data directory, or an invalid `--limit`. `2` if nothing could be processed.
 
-## 9. Sample Inputs
+## 9. Web UI (Streamlit)
+
+`app.py` wraps the same pipeline in a browser UI. It is the app behind the [live demo](#10-deployment-aws).
+
+```bash
+PYTHONPATH=src streamlit run app.py
+# then open http://localhost:8501
+```
+
+The provider and model come from the server configuration (`.env` / environment), exactly as for the CLI. For example, `LLM_PROVIDER=bedrock AWS_PROFILE=capstone PYTHONPATH=src streamlit run app.py`.
+
+What the UI does:
+
+1. **Choose documents.** Either *Use sample documents* (the 7 files in `data/`, with a text preview) or *Upload your own* (TXT / PDF / DOCX, up to 5 files, 2 MB each).
+2. **Process.** A slider sets the parallel workers (1–4). The run calls the same `CaseProcessingPipeline` and `OutputWriter` as the CLI, in a per-session temporary folder.
+3. **Results.** Metrics (total, success, partial, failed, total time), the consolidated report table, **download buttons for `final_report.csv` and a zip of all outputs**, and one expander per document with tabs for *Structured data*, *Customer email* and *Case summary*. Unreadable files are shown as errors. The rest of the batch still completes.
+
+Because the demo is public, `app.py` has some guard rails: a **per-session run limit** (10 runs), a **global semaphore** that allows at most 2 runs at the same time (other users get a "server busy" message), upload count, type and size checks, and friendly error messages instead of tracebacks. The processing logic sits in a plain function (`run_processing`), so `tests/test_app.py` can test it without a browser.
+
+## 10. Deployment (AWS)
+
+**Live demo:** http://15.207.159.211
+
+```
+Browser ──HTTP :80──► EC2 t4g.small (Amazon Linux 2023, arm64, ap-south-1)
+                        └─ Docker container "complaint-app" (python:3.11-slim, non-root)
+                             └─ Streamlit app.py :8501  (host :80 → container :8501)
+                                  └─ CaseProcessingPipeline (extraction → email ‖ summary)
+                                       └─ ChatBedrockConverse ──► Amazon Bedrock (Nova 2 Lite)
+                                            credentials: IAM instance role (no keys on the server)
+
+GitHub (public repo) ──git clone / git pull──► EC2 user-data / deploy/redeploy.sh ──► docker build + run
+```
+
+| Piece | Details |
+|---|---|
+| Image | `Dockerfile`: `python:3.11-slim`, installs `requirements.txt`, runs as non-root `appuser`, `HEALTHCHECK` on `/_stcore/health`, `CMD streamlit run app.py` on port 8501. Defaults `LLM_PROVIDER=bedrock`, `AWS_REGION=ap-south-1`. `.dockerignore` keeps `.env`, `.venv`, `logs/` and the pptx out of the image |
+| Host | EC2 **t4g.small** (Graviton, arm64), Amazon Linux 2023, region **ap-south-1** (Mumbai) |
+| Bootstrap | `deploy/ec2_user_data.sh`: installs Docker and git, clones the public GitHub repo to `/opt/complaint-app`, installs `redeploy.sh` as `/usr/local/bin/redeploy-complaint-app` and runs it |
+| Run | `deploy/redeploy.sh`: `git pull --ff-only`, `docker build`, then `docker run -d --restart unless-stopped -p 80:8501 -e LLM_PROVIDER=bedrock -e AWS_REGION=ap-south-1 -e MAX_WORKERS=4` |
+| Credentials | IAM role with an inline policy allowing only the Bedrock invoke actions, plus the managed `AmazonSSMManagedInstanceCore` policy. No API keys or `.env` on the server |
+| Network | Security group opens inbound TCP **80**. No SSH port is needed, since administration goes through SSM |
+| Redeploy | Run `redeploy-complaint-app` on the host, triggered remotely with **SSM Run Command** |
+
+### Step-by-step (AWS CLI)
+
+```bash
+export AWS_REGION=ap-south-1
+
+# 1. IAM role for the instance: least-privilege Bedrock invoke (deploy/bedrock-invoke-policy.json) + SSM
+#    (replace the account id in deploy/bedrock-invoke-policy.json with your own)
+aws iam create-role --role-name complaint-app-ec2-role \
+  --assume-role-policy-document file://deploy/ec2-trust-policy.json
+aws iam put-role-policy --role-name complaint-app-ec2-role --policy-name bedrock-invoke \
+  --policy-document file://deploy/bedrock-invoke-policy.json
+aws iam attach-role-policy --role-name complaint-app-ec2-role \
+  --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+aws iam create-instance-profile --instance-profile-name complaint-app-ec2-profile
+aws iam add-role-to-instance-profile --instance-profile-name complaint-app-ec2-profile \
+  --role-name complaint-app-ec2-role
+
+# 2. Security group allowing HTTP (default VPC)
+VPC_ID=$(aws ec2 describe-vpcs --filters Name=isDefault,Values=true --query 'Vpcs[0].VpcId' --output text)
+SG_ID=$(aws ec2 create-security-group --group-name complaint-app-sg --vpc-id "$VPC_ID" \
+  --description "Capstone complaint app HTTP" --query GroupId --output text)
+aws ec2 authorize-security-group-ingress --group-id "$SG_ID" --protocol tcp --port 80 --cidr 0.0.0.0/0
+
+# 3. Launch the instance (latest Amazon Linux 2023 arm64 AMI) with the user-data bootstrap.
+#    HttpPutResponseHopLimit=2 lets the Docker container reach the instance-role credentials (IMDSv2).
+AMI_ID=$(aws ssm get-parameter \
+  --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64 \
+  --query Parameter.Value --output text)
+INSTANCE_ID=$(aws ec2 run-instances --image-id "$AMI_ID" --instance-type t4g.small \
+  --iam-instance-profile Name=complaint-app-ec2-profile --security-group-ids "$SG_ID" \
+  --user-data file://deploy/ec2_user_data.sh \
+  --metadata-options HttpTokens=required,HttpPutResponseHopLimit=2 \
+  --block-device-mappings 'DeviceName=/dev/xvda,Ebs={VolumeSize=16,VolumeType=gp3}' \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=complaint-app}]' \
+  --query 'Instances[0].InstanceId' --output text)
+
+# 4. Attach a static Elastic IP. The app is up at http://<PUBLIC_IP> ~2-3 minutes later (image build)
+aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
+ALLOC_ID=$(aws ec2 allocate-address --domain vpc --query AllocationId --output text)
+aws ec2 associate-address --instance-id "$INSTANCE_ID" --allocation-id "$ALLOC_ID"
+aws ec2 describe-addresses --allocation-ids "$ALLOC_ID" --query 'Addresses[0].PublicIp' --output text
+
+# 5. Redeploy after pushing new commits to GitHub (no SSH needed)
+aws ssm send-command --instance-ids "$INSTANCE_ID" --document-name AWS-RunShellScript \
+  --parameters 'commands=["/usr/local/bin/redeploy-complaint-app"]'
+```
+
+Before the first run, Bedrock must be available for the account in `ap-south-1`. Nova 2 Lite is called through the `global.` cross-region inference profile. Verified live deployment: a batch run inside the container on EC2 processed the 6 sample documents in 6.9 s (1 corrupted file reported as failed).
+
+## 11. Sample Inputs
 
 `scripts/generate_sample_data.py` creates seven fictional documents for the company "BrightWave Electronics & Broadband Ltd.". Together they cover every category of behaviour the pipeline must handle:
 
@@ -270,7 +404,7 @@ PYTHONPATH=src python -m complaint_processor --help
 | `complaint_006.txt` | Plain-text email + internal note | Compliment plus a plan question. Ticket closed | **Not a complaint** (`is_complaint = No`). Category Other. **Closed** |
 | `corrupted_007.pdf` | Random bytes with a PDF header | – | **Ingestion failure isolation**: logged, reported as `failed`, batch continues |
 
-## 10. Sample Outputs (real run)
+## 12. Sample Outputs (real run)
 
 All excerpts below are copied verbatim from `output/`. They were produced by a real run with **local Ollama `glm-4.7-flash`** and **3 workers**. Result: **6 success, 0 partial, 1 failed** (the corrupted file), in **127.4 s** total. Each document took about 58 s on average, and the documents ran concurrently.
 
@@ -392,7 +526,7 @@ Escalated - No resolution confirmed to the customer.
 The Logistics Escalations Desk should contact SwiftShip Logistics to obtain a specific delivery timeline for the Pune hub and communicate a firm date to the customer. If the delay cannot be resolved within 48 hours, the Regional Operations Manager should authorize a refund or cancellation as requested by the customer.
 ```
 
-Every reason in the recommendation comes from the document: the 48-hour window the customer was repeatedly promised, and the refund or cancellation they asked for. An earlier run had invented a chargeback threat here. See [Limitations](#17-limitations--future-improvements) for how the prompt was fixed.
+Every reason in the recommendation comes from the document: the 48-hour window the customer was repeatedly promised, and the refund or cancellation they asked for. An earlier run had invented a chargeback threat here. See [Limitations](#19-limitations--future-improvements) for how the prompt was fixed.
 
 ### `run_summary.json`
 
@@ -418,7 +552,22 @@ Every reason in the recommendation comes from the document: the 48-hour window t
 
 The sum of per-document times is about 348 s, but wall-clock time was 127.4 s. This speed-up of roughly 2.7× comes from the two levels of parallelism described below.
 
-## 11. Workflow Design
+### Provider comparison: Ollama (local) vs Amazon Bedrock
+
+The same 7 documents were also run on **Amazon Bedrock** with the default model, `python main.py --provider bedrock --workers 4` (region `ap-south-1`). That run's outputs are not committed. The files in `output/` are from the Ollama run above.
+
+| | Ollama (local) | Amazon Bedrock |
+|---|---|---|
+| Model | `glm-4.7-flash` | `global.amazon.nova-2-lite-v1:0` (Nova 2 Lite) |
+| Where it runs | Laptop, no API key | AWS managed API, IAM / AWS profile credentials |
+| Workers | 3 | 4 |
+| Result | 6 success, 0 partial, 1 failed | 6 success, 0 partial, 1 failed |
+| **Total wall-clock time** | **127.4 s** | **8.6 s** (about 15× faster) |
+| Avg time per document | ~58 s | ~4.2 s |
+
+The failed file is `corrupted_007.pdf` in both runs. Name, email, phone, category, `is_complaint`, escalation and supporting-document values were identical for all six documents (including `null` phone for `complaint_005`). Differences were minor: Nova put serial or connection IDs into `product_or_service` for two documents, and marked `complaint_001` as `Resolved` rather than `Closed`, which is the ambiguous "Resolved - closed" wording discussed in [Limitations](#19-limitations--future-improvements). The live demo uses Bedrock Nova 2 Lite.
+
+## 13. Workflow Design
 
 ### The three AI tasks
 
@@ -461,7 +610,7 @@ Each branch of the `RunnableParallel` is wrapped in `_run_guarded`, which return
 
 LLM calls are I/O-bound, so threads give real speed-ups without multiprocessing overhead.
 
-## 12. Prompt Engineering & Hallucination Controls
+## 14. Prompt Engineering & Hallucination Controls
 
 **Prompt design (`prompts.py`)**
 
@@ -486,7 +635,7 @@ LLM calls are I/O-bound, so threads give real speed-ups without multiprocessing 
 - **Prompt-level rules.** The email must not promise refunds, compensation, dates or reference numbers unless the document states them. Only facts from the document or case data may be used.
 - **Schema-level constraints.** Enums make invalid categories, flags and statuses impossible. The `email` validator lowercases the address and rejects values without an `@`.
 
-## 13. Error Handling
+## 15. Error Handling
 
 | Failure | Where handled | Behaviour |
 |---|---|---|
@@ -505,8 +654,10 @@ LLM calls are I/O-bound, so threads give real speed-ups without multiprocessing 
 | Any unexpected exception in a worker | `_safe_process` | Converted to a `FAILED` result, never crashes the pool |
 | File write error | `OutputWriter.write_results` | Logged and appended to the result's `errors` |
 | Stale outputs from a previous run | `OutputWriter.prepare()` | Clears only files in the three managed sub-folders |
+| Bedrock throttling / timeouts | botocore `Config` in `llm.py` | Standard retry mode, `max_attempts = LLM_MAX_RETRIES + 1`, read timeout `LLM_TIMEOUT_SECONDS` |
+| Web UI overload or LLM error | `app.py` | Per-session run limit, global semaphore ("server busy" message), friendly error instead of a traceback |
 
-## 14. Logging
+## 16. Logging
 
 `logging_setup.setup_logging()` sets up two handlers on the root logger:
 
@@ -532,11 +683,11 @@ Real excerpt from the sample run:
 
 The logs cover ingestion (loaded, skipped, truncated, failed), LLM initialisation (provider, model, temperature), per-step timing and status, structured-output fallbacks and retries, guardrail warnings and output file locations. Noisy third-party loggers (`httpx`, `httpcore`, `openai`, `urllib3`, `google`, `pypdf`) are raised to WARNING.
 
-## 15. Testing
+## 17. Testing
 
 ```bash
 PYTHONPATH=src .venv/bin/python -m pytest -q
-# 28 passed
+# 28 core tests (ingestion, chains, pipeline) + tests/test_app.py for the web UI logic
 ```
 
 All tests run **offline**, with no API keys and no network. They use LangChain's `FakeListChatModel`, which has no native structured output and therefore exercises the fallback path, plus `monkeypatch`ed chain functions.
@@ -546,11 +697,12 @@ All tests run **offline**, with no API keys and no network. They use LangChain's
 | `tests/test_ingestion.py` | 8 | TXT (UTF-8 and latin-1 fallback), PDF, DOCX including tables, unsupported/empty files, skipping plus error capture for corrupted files, truncation, missing directory |
 | `tests/test_chains.py` | 13 | JSON repair (`<think>`, code fences, orphan `</think>`, trailing commas, no JSON), single-key unwrapping, fallback parse of noisy output, retry-once-then-succeed, raise after a second failure, contact sanitisation, email/summary functions, `RunnableParallel` returning both models, guardrails passing and flagging, guardrail warning logged without dropping the email |
 | `tests/test_pipeline.py` | 7 | Success path, extraction failure → FAILED with downstream skipped, summary failure → PARTIAL, **email and summary really run in parallel** (barrier test), batch order preserved and failures isolated with 4 workers, empty batch, writers create every expected file and the CSV columns |
+| `tests/test_app.py` | – | Web UI: the app renders without exceptions and shows results after a click (Streamlit `AppTest`, fake LLM), `run_processing` isolates the corrupted file, upload count/type/size limits |
 
-## 16. Key Design Decisions
+## 18. Key Design Decisions
 
 1. **Pydantic as the single contract.** `schemas.py` defines everything that crosses a module boundary (`LoadedDocument`, `ComplaintExtraction`, `CustomerEmail`, `CaseSummary`, `DocumentResult`). The LLM output, JSON files and CSV rows all derive from the same models.
-2. **Provider-agnostic LLM factory.** `get_llm()` returns a `BaseChatModel`, and provider packages are imported lazily, so a fully local Ollama run needs no cloud SDK credentials. The LLM is **injected** into `CaseProcessingPipeline`, which makes testing easy.
+2. **Provider-agnostic LLM factory.** `get_llm()` returns a `BaseChatModel`, and provider packages are imported lazily, so a fully local Ollama run needs no cloud SDK credentials. Bedrock uses the standard AWS credential chain, so the same code works with a local profile and with an EC2 instance role. The LLM is **injected** into `CaseProcessingPipeline`, which makes testing easy.
 3. **Native structured output first, repair second.** You get the reliability of constrained decoding where it is available, and the pipeline still works on models and servers that return messy JSON.
 4. **Extract once, generate twice.** Downstream tasks reuse the validated extraction, which keeps the email, summary and CSV consistent.
 5. **Never crash the batch.** Errors are data (`IngestionError`, `TaskOutcome`, `DocumentResult.errors`), and the status has three levels (`success` / `partial` / `failed`).
@@ -558,7 +710,7 @@ All tests run **offline**, with no API keys and no network. They use LangChain's
 7. **Deterministic outputs.** Results come back in input order, the CSV is sorted by file name, stale outputs are cleared, and the temperature is low.
 8. **Configuration layering.** Code defaults, then `.env` / environment, then CLI flags. `Settings` is a frozen dataclass, and overrides are applied with `dataclasses.replace`.
 
-## 17. Limitations & Future Improvements
+## 19. Limitations & Future Improvements
 
 **Observed in the sample run.** The run used a small local model, and every output was reviewed by hand against the source documents.
 
@@ -579,10 +731,11 @@ All tests run **offline**, with no API keys and no network. They use LangChain's
 - A labelled evaluation set with per-field accuracy metrics for category, status and flags.
 - OCR (e.g. Tesseract) for scanned PDFs, plus chunking or map-reduce for long documents.
 - Async batching or rate-limit-aware concurrency for hosted APIs, and response caching.
-- A human-in-the-loop review UI (e.g. Streamlit), plus a REST API or queue consumer for integration with ticketing systems.
-- LangSmith tracing, and Docker packaging.
+- Turn the Streamlit UI into a human-in-the-loop review tool (edit and approve before sending), plus a REST API or queue consumer for integration with ticketing systems.
+- HTTPS and a domain for the demo (e.g. an ALB or CloudFront with ACM), and authentication.
+- LangSmith tracing, and CI/CD that builds the Docker image and redeploys automatically instead of `redeploy.sh`.
 
-## 18. Mapping to Evaluation Requirements
+## 20. Mapping to Evaluation Requirements
 
 | Requirement | Where implemented | Status |
 |---|---|---|
@@ -601,10 +754,12 @@ All tests run **offline**, with no API keys and no network. They use LangChain's
 | Error handling and retries | `structured_call` (fallback + retry), `_run_guarded`, `_safe_process`, provider `max_retries` | ✅ |
 | Logging | `logging_setup.py` → console + `logs/app.log` | ✅ |
 | Configuration via environment / `.env` | `config.py`, `.env.example` | ✅ |
-| Multiple LLM providers | `llm.py` (OpenAI, Gemini, Ollama) | ✅ |
+| Multiple LLM providers | `llm.py` (OpenAI, Gemini, Ollama, Amazon Bedrock) | ✅ |
 | CLI / easy execution | `main.py`, `cli.py`, `python -m complaint_processor` | ✅ |
 | Sample data | `scripts/generate_sample_data.py`, `data/` | ✅ |
-| Automated tests | `tests/` (28 offline tests) | ✅ |
+| Automated tests | `tests/` (28 offline pipeline tests + `test_app.py`) | ✅ |
+| Web UI | `app.py` (Streamlit), `.streamlit/config.toml` | ✅ |
+| Cloud deployment | `Dockerfile`, `deploy/ec2_user_data.sh`, `deploy/redeploy.sh` on AWS EC2 + Bedrock via IAM role | ✅ |
 | Documentation and architecture diagram | `README.md`, `docs/architecture.png`, Mermaid flowchart above | ✅ |
 
 ---

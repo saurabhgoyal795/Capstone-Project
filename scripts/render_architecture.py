@@ -81,7 +81,7 @@ def render(out_path: Path) -> Path:
     box(ax, 0.35, 6.75, 3.3, 1.2, "config.py  /  .env",
         ["Settings dataclass (python-dotenv)", "provider, model, workers, paths, limits"], C_SIDE)
     box(ax, 5.35, 6.75, 3.9, 1.2, "LLM factory  (llm.py)",
-        ["get_llm(): OpenAI | Gemini | Ollama", "temperature 0.1, timeout, retries"], C_SIDE)
+        ["get_llm(): OpenAI | Gemini | Ollama | Bedrock", "temperature 0.1, timeout, retries"], C_SIDE)
     box(ax, 10.65, 6.75, 3.1, 1.2, "logging_setup.py",
         ["console + rotating logs/app.log", "per-thread, per-step timings"], C_SIDE)
 
@@ -89,6 +89,12 @@ def render(out_path: Path) -> Path:
     box(ax, 0.35, 3.1, 2.0, 2.6, "data/",
         ["complaint_*.pdf", "complaint_*.txt", "complaint_*.docx", "", "7 sample files", "(1 corrupted)"],
         C_INPUT)
+
+    # Entry points ----------------------------------------------------------
+    box(ax, 0.35, 0.6, 2.1, 1.5, "Entry points",
+        ["Streamlit UI  (app.py)", "CLI  (main.py)", "samples or uploads"],
+        C_INPUT, title_size=10.5, line_size=8.4)
+    arrow(ax, (1.35, 2.12), (1.35, 3.08), color=C_INPUT[1])
 
     # Ingestion -----------------------------------------------------------
     box(ax, 2.85, 2.75, 2.3, 3.2, "Ingestion",
