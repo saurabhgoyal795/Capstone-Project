@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-09-23T18:24:30+00:00",
+  "provider": "ollama",
+  "model": "glm-4.7-flash:latest",
+  "max_workers": 3,
+  "total_files": 7,
+  "documents_processed": 6,
+  "ingestion_failures": 1,
+  "success": 6,
+  "partial": 0,
+  "failed": 1,
+  "total_seconds": 127.4,
+  "avg_seconds_per_document": 57.96,
+  "ingestion_errors": [
+    {
+      "file_name": "corrupted_007.pdf",
+      "error": "PdfStreamError: Stream has ended unexpectedly"
+    }
+  ]
+}

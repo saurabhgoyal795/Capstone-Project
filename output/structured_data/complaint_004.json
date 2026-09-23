@@ -1,0 +1,20 @@
+{
+  "doc_id": "complaint_004",
+  "file_name": "complaint_004.docx",
+  "status": "success",
+  "extraction": {
+    "customer_name": "Daniel D'Souza",
+    "email": "daniel.dsouza@example.com",
+    "phone_number": "+91 90000 70004",
+    "product_or_service": "BrightWave Vista 55\" 4K Smart TV + wall-mount kit",
+    "complaint_category": "Delivery",
+    "issue_description": "The customer ordered a 55-inch TV which was promised for delivery by 31 August and is now twelve days late, with tracking showing 'held at hub' for ten days.",
+    "resolution_provided": null,
+    "is_complaint": "Yes",
+    "escalation_required": "Yes",
+    "supporting_document_available": "Yes",
+    "overall_case_status": "Escalated"
+  },
+  "errors": [],
+  "duration_seconds": 55.011
+}

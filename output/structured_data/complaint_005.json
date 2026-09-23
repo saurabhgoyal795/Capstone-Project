@@ -1,0 +1,20 @@
+{
+  "doc_id": "complaint_005",
+  "file_name": "complaint_005.pdf",
+  "status": "success",
+  "extraction": {
+    "customer_name": "Kavita Singh",
+    "email": "kavita.singh@example.com",
+    "phone_number": null,
+    "product_or_service": "BrightWave SoundPod Pro Wireless Earbuds",
+    "complaint_category": "Refund",
+    "issue_description": "The customer returned the SoundPod Pro earbuds due to a charging issue and has not received the refund of Rs. 7,499 despite a return confirmation email.",
+    "resolution_provided": null,
+    "is_complaint": "Yes",
+    "escalation_required": "Yes",
+    "supporting_document_available": "Yes",
+    "overall_case_status": "Escalated"
+  },
+  "errors": [],
+  "duration_seconds": 57.743
+}

@@ -1,0 +1,40 @@
+BRIGHTWAVE ELECTRONICS & BROADBAND - CASE NOTES
+===============================================
+Case Ref       : BW-CMP-2026-003
+Date Opened    : 14 September 2026
+Channel        : Phone call to customer care
+Agent          : Rahul Verma (Network Support, L1)
+
+CUSTOMER
+Name           : Meera Iyer
+Email          : meera.iyer@example.com
+Phone          : +91 99887 60003
+Service        : HomeNet 100 Mbps Broadband, Connection ID HN-220718
+Address        : Flat 4B, Lakeview Residency, Koramangala, Bengaluru
+
+ISSUE SUMMARY
+Customer reports repeated broadband outages over the last two weeks. The connection drops
+completely three to four times a day, usually for 30 to 90 minutes, mostly in the evening.
+She works from home and has missed two client video calls. She says this is the third
+time she has called; previous tickets BW-TKT-60112 (03 Sep) and BW-TKT-60398 (08 Sep) were
+closed after a remote router reboot, but the problem came back each time.
+
+TROUBLESHOOTING DONE
+- Remote line test shows high signal loss on the fibre drop to the building.
+- Router firmware updated remotely to v4.2.1; issue persists.
+- Customer confirmed no other devices or power issues at her end.
+
+ACTION TAKEN / NEXT STEPS
+A field technician visit has been scheduled for 16 September 2026, 10:00-13:00, to inspect
+the fibre splice box and replace the drop cable if required. A service credit of 5 days will
+be reviewed once the fault is fixed. Customer was polite but frustrated; she asked us to
+call before the visit.
+
+ATTACHMENTS
+None. No documents or screenshots were provided by the customer.
+
+ESCALATION
+Not escalated at this stage. Will be reviewed by L2 if the technician visit does not fix the fault.
+
+STATUS
+In Progress - technician visit scheduled.

@@ -1,0 +1,20 @@
+{
+  "doc_id": "complaint_001",
+  "file_name": "complaint_001.pdf",
+  "status": "success",
+  "extraction": {
+    "customer_name": "Arjun Mehta",
+    "email": "arjun.mehta@example.com",
+    "phone_number": "+91 98765 40001",
+    "product_or_service": "FiberMax 300 Mbps Broadband Plan",
+    "complaint_category": "Billing",
+    "issue_description": "The customer's August 2026 invoice shows a charge of Rs. 2,398, which is double the standard monthly rate of Rs. 1,199, due to a duplicate plan line entry.",
+    "resolution_provided": "A refund of Rs. 1,199 was processed (refund ref RF-77120) and a corrected invoice was issued.",
+    "is_complaint": "Yes",
+    "escalation_required": "No",
+    "supporting_document_available": "Yes",
+    "overall_case_status": "Closed"
+  },
+  "errors": [],
+  "duration_seconds": 60.074
+}

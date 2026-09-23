@@ -1,0 +1,20 @@
+{
+  "doc_id": "complaint_003",
+  "file_name": "complaint_003.txt",
+  "status": "success",
+  "extraction": {
+    "customer_name": "Meera Iyer",
+    "email": "meera.iyer@example.com",
+    "phone_number": "+91 99887 60003",
+    "product_or_service": "HomeNet 100 Mbps Broadband",
+    "complaint_category": "Technical Issue",
+    "issue_description": "Customer reports repeated broadband outages over the last two weeks, with the connection dropping three to four times a day for 30 to 90 minutes, mostly in the evening.",
+    "resolution_provided": "A field technician visit has been scheduled for 16 September 2026, 10:00-13:00, to inspect the fibre splice box and replace the drop cable if required.",
+    "is_complaint": "Yes",
+    "escalation_required": "No",
+    "supporting_document_available": "No",
+    "overall_case_status": "In Progress"
+  },
+  "errors": [],
+  "duration_seconds": 47.699
+}

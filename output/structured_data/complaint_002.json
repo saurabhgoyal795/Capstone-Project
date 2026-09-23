@@ -1,0 +1,20 @@
+{
+  "doc_id": "complaint_002",
+  "file_name": "complaint_002.pdf",
+  "status": "success",
+  "extraction": {
+    "customer_name": "Sneha Kulkarni",
+    "email": "sneha.kulkarni@example.com",
+    "phone_number": "+91 91234 50002",
+    "product_or_service": "BrightWave NovaBook 14 Laptop (16GB / 512GB)",
+    "complaint_category": "Product Defect",
+    "issue_description": "The screen started flickering and the laptop shuts down randomly within ten days of purchase. The motherboard was replaced on 01 September, but the same problem has returned and the keyboard backlight now fails.",
+    "resolution_provided": null,
+    "is_complaint": "Yes",
+    "escalation_required": "Yes",
+    "supporting_document_available": "Yes",
+    "overall_case_status": "Open"
+  },
+  "errors": [],
+  "duration_seconds": 73.228
+}

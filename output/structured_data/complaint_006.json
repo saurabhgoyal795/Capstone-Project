@@ -1,0 +1,20 @@
+{
+  "doc_id": "complaint_006",
+  "file_name": "complaint_006.txt",
+  "status": "success",
+  "extraction": {
+    "customer_name": "Rohan Kapoor",
+    "email": "rohan.kapoor@example.com",
+    "phone_number": "+91 98111 80006",
+    "product_or_service": "FiberMax 500 plan",
+    "complaint_category": "Other",
+    "issue_description": "The customer inquired about adding the BrightWave TV+ streaming bundle mid-cycle to their FiberMax 500 plan and whether the charge would be pro-rated.",
+    "resolution_provided": "The customer's plan query was answered via email: TV+ can be added any time and is pro-rated from the activation date.",
+    "is_complaint": "No",
+    "escalation_required": "No",
+    "supporting_document_available": "No",
+    "overall_case_status": "Closed"
+  },
+  "errors": [],
+  "duration_seconds": 54.033
+}
